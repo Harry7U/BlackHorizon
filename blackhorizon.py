@@ -1,83 +1,106 @@
 import os
 import json
 import subprocess
-import threading
-import time
-import signal
+import requests
 from colorama import Fore, Style, init
 
-# Initialize colorama
+# Initialize colorama for colored output
 init(autoreset=True)
 
-# Load Config
-CONFIG_FILE = "config/settings.json"
-if not os.path.exists(CONFIG_FILE):
-    print(Fore.RED + f"⚠️ Config file {CONFIG_FILE} is missing! Run `setup_config.py`")
-    exit(1)
+# Ensure the required directories exist
+REQUIRED_DIRS = ["config", "modules", "reports", "wordlists"]
+for directory in REQUIRED_DIRS:
+    os.makedirs(directory, exist_ok=True)
 
-with open(CONFIG_FILE) as config_file:
+# Load Config
+CONFIG_PATH = "config/settings.json"
+if not os.path.exists(CONFIG_PATH):
+    print(Fore.RED + "⚠️ Missing configuration file! Creating a default one...")
+    default_config = {"TARGET": "http://testphp.vulnweb.com"}
+    with open(CONFIG_PATH, "w") as config_file:
+        json.dump(default_config, config_file, indent=4)
+
+with open(CONFIG_PATH) as config_file:
     config = json.load(config_file)
 
-TARGET = config.get("TARGET", "example.com")
+TARGET = config["TARGET"]
 
-# Handle Keyboard Interrupt
-def signal_handler(sig, frame):
-    print(Fore.RED + "\n⚠️ Process interrupted by user (Ctrl+C). Cleaning up...")
-    exit(0)
+# Wordlist auto-downloads from GitHub
+WORDLISTS = {
+    "subdomains": "https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/DNS/subdomains-top1million-5000.txt",
+    "directories": "https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/common.txt",
+    "xss": "https://raw.githubusercontent.com/swisskyrepo/PayloadsAllTheThings/master/XSS%20Injection/Intruder/xss.txt",
+    "sqli": "https://raw.githubusercontent.com/swisskyrepo/PayloadsAllTheThings/master/SQL%20Injection/Intruder/SQLi.txt",
+    "lfi": "https://raw.githubusercontent.com/swisskyrepo/PayloadsAllTheThings/master/Directory%20Traversal/Intruder/lfi.txt",
+    "fuzz": "https://raw.githubusercontent.com/Bo0oM/fuzz.txt/master/fuzz.txt"
+}
 
-signal.signal(signal.SIGINT, signal_handler)
+def download_wordlist(name, url):
+    path = os.path.join("wordlists", f"{name}.txt")
+    if not os.path.exists(path):
+        print(Fore.YELLOW + f"⬇️ Downloading {name} wordlist...")
+        try:
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            with open(path, "w") as file:
+                file.write(response.text)
+            print(Fore.GREEN + f"✅ {name} wordlist saved!")
+        except requests.RequestException:
+            print(Fore.RED + f"⚠️ Failed to fetch {name} wordlist!")
+    else:
+        print(Fore.GREEN + f"✅ {name} wordlist already exists.")
 
-# Run a module safely
+for name, url in WORDLISTS.items():
+    download_wordlist(name, url)
+
+# Display Banner
+def display_banner():
+    """Displays the ASCII art banner."""
+    banner_text = """
+    ██████╗ ██╗      █████╗  ██████╗██╗  ██╗
+    ██╔══██╗██║     ██╔══██╗██╔════╝██║ ██╔╝
+    ██████╔╝██║     ███████║██║     █████╔╝ 
+    ██╔═══╝ ██║     ██╔══██║██║     ██╔═██╗ 
+    ██║     ███████╗██║  ██║╚██████╗██║  ██╗
+    ╚═╝     ╚══════╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝
+      Black Horizon - AI-Powered Cyber Offense Suite
+    -----------------------------------------------
+    Automating Reconnaissance, Exploitation, C2 & Evasion
+    """
+    print(Fore.MAGENTA + banner_text)
+
+# Run a module and handle errors
 def run_module(module_name, script_path):
     """Runs a module and handles errors."""
-    if not os.path.exists(script_path):
-        print(Fore.RED + f"❌ Module {module_name} not found: {script_path}")
-        return
-
     print(Fore.CYAN + f"\n🚀 Running {module_name}...\n" + Fore.YELLOW)
-    
-    start_time = time.time()
     try:
-        subprocess.run(["python", script_path], check=True)
+        subprocess.run(["python3", script_path], check=True)
+    except FileNotFoundError:
+        print(Fore.RED + f"⚠️ Module {script_path} not found!")
     except subprocess.CalledProcessError as e:
         print(Fore.RED + f"⚠️ Error in {module_name}: {e}")
-    except KeyboardInterrupt:
-        print(Fore.RED + f"⚠️ {module_name} interrupted by user.")
-        exit(0)
 
-    end_time = time.time()
-    print(Fore.GREEN + f"✅ {module_name} completed in {round(end_time - start_time, 2)} seconds.")
-
-# Run all modules
-def run_all_modules():
+# Main Execution
+def main():
     """Executes all modules in sequence."""
-    modules = {
+    display_banner()
+
+    print(Fore.GREEN + "✅ Welcome to Black Horizon – AI-Powered Cyber Offense Suite")
+    print(Fore.GREEN + "🚀 Automating Reconnaissance, Exploitation, C2 & Anti-Forensics...\n")
+
+    MODULES = {
         "Reconnaissance": "modules/recon.py",
         "Active Vulnerability Scan": "modules/active_scan.py",
         "AI-Powered Exploitation": "modules/exploit.py",
         "Command & Control (C2)": "modules/c2.py",
-        "AI-Powered Fuzzing": "modules/fuzzing.py",
+        "Fuzzing": "modules/fuzzing.py",
         "Privilege Escalation": "modules/priv_esc.py",
         "Evasion": "modules/evasion.py",
         "Anti-Forensics": "modules/anti_forensics.py"
     }
 
-    threads = []
-    for module_name, script_path in modules.items():
-        thread = threading.Thread(target=run_module, args=(module_name, script_path))
-        threads.append(thread)
-        thread.start()
-
-    for thread in threads:
-        thread.join()
-
-# Main Execution
-def main():
-    """Executes all modules."""
-    print(Fore.GREEN + "✅ Welcome to Black Horizon – AI-Powered Cyber Offense Suite")
-    print(Fore.GREEN + "🚀 Automating Reconnaissance, Exploitation, C2 & Anti-Forensics...\n")
-
-    run_all_modules()
+    for module, path in MODULES.items():
+        run_module(module, path)
 
     print(Fore.GREEN + "\n🎯 All modules executed successfully! Reports saved in 'reports/'\n")
 
