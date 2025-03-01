@@ -1,0 +1,6 @@
+{
+    "TARGET": "testphp.vulnweb.com",
+    "GITHUB_API_KEY": "your_github_token_here",
+    "C2_SERVER": "your-c2-server.com",
+    "TIMEOUT": 10
+}
