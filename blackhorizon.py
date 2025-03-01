@@ -2,12 +2,8 @@ import os
 import json
 import subprocess
 import requests
-from colorama import Fore, Style, init
 
-# Initialize colorama for colored output
-init(autoreset=True)
-
-# Ensure the required directories exist
+# Ensure required directories exist
 REQUIRED_DIRS = ["config", "modules", "reports", "wordlists"]
 for directory in REQUIRED_DIRS:
     os.makedirs(directory, exist_ok=True)
@@ -15,43 +11,49 @@ for directory in REQUIRED_DIRS:
 # Load Config
 CONFIG_PATH = "config/settings.json"
 if not os.path.exists(CONFIG_PATH):
-    print(Fore.RED + "⚠️ Missing configuration file! Creating a default one...")
-    default_config = {"TARGET": "http://testphp.vulnweb.com"}
+    print("⚠️ Missing configuration file! Creating a default one...")
+    default_config = {"TARGET": ""}
     with open(CONFIG_PATH, "w") as config_file:
         json.dump(default_config, config_file, indent=4)
 
 with open(CONFIG_PATH) as config_file:
     config = json.load(config_file)
 
-TARGET = config["TARGET"]
+TARGET = config.get("TARGET", "").strip()
 
-# Wordlist auto-downloads from GitHub
-WORDLISTS = {
-    "subdomains": "https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/DNS/subdomains-top1million-5000.txt",
-    "directories": "https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/common.txt",
-    "xss": "https://raw.githubusercontent.com/swisskyrepo/PayloadsAllTheThings/master/XSS%20Injection/Intruder/xss.txt",
-    "sqli": "https://raw.githubusercontent.com/swisskyrepo/PayloadsAllTheThings/master/SQL%20Injection/Intruder/SQLi.txt",
-    "lfi": "https://raw.githubusercontent.com/swisskyrepo/PayloadsAllTheThings/master/Directory%20Traversal/Intruder/lfi.txt",
-    "fuzz": "https://raw.githubusercontent.com/Bo0oM/fuzz.txt/master/fuzz.txt"
-}
+if not TARGET:
+    print("⚠️ No target specified in config/settings.json! Please set a valid TARGET.")
+    exit(1)
 
-def download_wordlist(name, url):
-    path = os.path.join("wordlists", f"{name}.txt")
-    if not os.path.exists(path):
-        print(Fore.YELLOW + f"⬇️ Downloading {name} wordlist...")
-        try:
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()
-            with open(path, "w") as file:
-                file.write(response.text)
-            print(Fore.GREEN + f"✅ {name} wordlist saved!")
-        except requests.RequestException:
-            print(Fore.RED + f"⚠️ Failed to fetch {name} wordlist!")
-    else:
-        print(Fore.GREEN + f"✅ {name} wordlist already exists.")
+# Ensure wordlists are updated
+def update_all_wordlists():
+    """Ensures all required wordlists are downloaded."""
+    WORDLISTS = {
+        "subdomains": "https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/DNS/subdomains-top1million-5000.txt",
+        "directories": "https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/common.txt",
+        "xss": "https://raw.githubusercontent.com/swisskyrepo/PayloadsAllTheThings/master/XSS%20Injection/Intruders/IntrudersXSS.txt",
+        "sqli": "https://raw.githubusercontent.com/swisskyrepo/PayloadsAllTheThings/master/SQL%20Injection/Intruder/Auth_Bypass.txt",
+        "lfi": "https://raw.githubusercontent.com/swisskyrepo/PayloadsAllTheThings/master/Directory%20Traversal/Intruder/lfi.txt",
+        "fuzz": "https://raw.githubusercontent.com/Bo0oM/fuzz.txt/master/fuzz.txt"
+    }
 
-for name, url in WORDLISTS.items():
-    download_wordlist(name, url)
+    WORDLIST_DIR = "wordlists"
+    os.makedirs(WORDLIST_DIR, exist_ok=True)
+
+    for name, url in WORDLISTS.items():
+        path = os.path.join(WORDLIST_DIR, f"{name}.txt")
+        if not os.path.exists(path):
+            print(f"⬇️ Downloading {name} wordlist...")
+            try:
+                response = requests.get(url, timeout=10)
+                response.raise_for_status()
+                with open(path, "w", encoding="utf-8") as file:
+                    file.write(response.text)
+                print(f"✅ {name} wordlist saved successfully!")
+            except requests.RequestException as e:
+                print(f"⚠️ Failed to fetch {name} wordlist! Error: {e}")
+
+update_all_wordlists()
 
 # Display Banner
 def display_banner():
@@ -67,26 +69,26 @@ def display_banner():
     -----------------------------------------------
     Automating Reconnaissance, Exploitation, C2 & Evasion
     """
-    print(Fore.MAGENTA + banner_text)
+    print(banner_text)
 
 # Run a module and handle errors
 def run_module(module_name, script_path):
     """Runs a module and handles errors."""
-    print(Fore.CYAN + f"\n🚀 Running {module_name}...\n" + Fore.YELLOW)
+    print(f"\n🚀 Running {module_name}...\n")
     try:
         subprocess.run(["python3", script_path], check=True)
     except FileNotFoundError:
-        print(Fore.RED + f"⚠️ Module {script_path} not found!")
+        print(f"⚠️ Module {script_path} not found!")
     except subprocess.CalledProcessError as e:
-        print(Fore.RED + f"⚠️ Error in {module_name}: {e}")
+        print(f"⚠️ Error in {module_name}: {e}")
 
 # Main Execution
 def main():
     """Executes all modules in sequence."""
     display_banner()
 
-    print(Fore.GREEN + "✅ Welcome to Black Horizon – AI-Powered Cyber Offense Suite")
-    print(Fore.GREEN + "🚀 Automating Reconnaissance, Exploitation, C2 & Anti-Forensics...\n")
+    print("✅ Welcome to Black Horizon – AI-Powered Cyber Offense Suite")
+    print("🚀 Automating Reconnaissance, Exploitation, C2 & Anti-Forensics...\n")
 
     MODULES = {
         "Reconnaissance": "modules/recon.py",
@@ -102,7 +104,7 @@ def main():
     for module, path in MODULES.items():
         run_module(module, path)
 
-    print(Fore.GREEN + "\n🎯 All modules executed successfully! Reports saved in 'reports/'\n")
+    print("\n🎯 All modules executed successfully! Reports saved in 'reports/'\n")
 
 if __name__ == "__main__":
     main()
